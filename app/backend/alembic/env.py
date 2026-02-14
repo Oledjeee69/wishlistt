@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 import sys
 from pathlib import Path
 
@@ -18,8 +19,18 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Всегда используем DATABASE_URL из окружения (Railway/Render), а не из alembic.ini
-database_url = settings.database_url
+# URL берём из переменной окружения DATABASE_URL (Railway/Render подставляют её).
+# Если не задана — используется значение из settings (localhost для локальной разработки).
+_raw_url = os.environ.get("DATABASE_URL") or settings.database_url
+# Некоторые платформы отдают postgres://, SQLAlchemy ожидает postgresql://
+database_url = _raw_url.replace("postgres://", "postgresql://", 1) if _raw_url else settings.database_url
+
+if "localhost" in database_url or "127.0.0.1" in database_url:
+    if not os.environ.get("DATABASE_URL"):
+        raise RuntimeError(
+            "Миграции подключаются к localhost. Для облака (Railway/Render) задайте переменную DATABASE_URL. "
+            "Локально: создайте .env с DATABASE_URL или запускайте миграции при запущенной локальной PostgreSQL."
+        )
 
 
 def run_migrations_offline() -> None:
