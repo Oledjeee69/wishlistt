@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { getApiUrl } from "../../lib/api";
+import { getApiUrl } from "@/lib/api";
 
 interface Wishlist {
   id: number;
