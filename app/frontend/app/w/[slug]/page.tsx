@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { getApiUrl } from "../../lib/api";
+import { getApiUrl } from "@/lib/api";
 
 interface Contribution {
   id: number;
