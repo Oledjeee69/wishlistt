@@ -1,4 +1,9 @@
 from logging.config import fileConfig
+import sys
+from pathlib import Path
+
+# Корень проекта (backend) — чтобы при запуске alembic из любой директории находился модуль app
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -7,7 +12,7 @@ from app.core.config import settings
 from app.db import Base  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", "postgresql://wishl_user:L2ij0MwhO6VYCFHc43oIjbUbdNkoJbQw@dpg-d67689juibrs73cem9mg-a.oregon-postgres.render.com/wishl")
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
