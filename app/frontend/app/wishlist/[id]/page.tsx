@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { createWishlistSocket } from "../../../lib/ws";
-import { getApiUrl } from "../../../lib/api";
+import { createWishlistSocket } from "@/lib/ws";
+import { getApiUrl } from "@/lib/api";
 
 interface Item {
   id: number;
