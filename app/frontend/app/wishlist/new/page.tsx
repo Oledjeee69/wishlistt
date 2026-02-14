@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { getApiUrl } from "../../lib/api";
+import { getApiUrl } from "@/lib/api";
 
 export default function NewWishlistPage() {
   const router = useRouter();
