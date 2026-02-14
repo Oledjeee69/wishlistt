@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getApiUrl, NETWORK_ERROR_HINT } from "../../lib/api";
+import { getApiUrl, NETWORK_ERROR_HINT } from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
