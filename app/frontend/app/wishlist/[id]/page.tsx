@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 
 import { createWishlistSocket } from "@/lib/ws";
 import { getApiUrl } from "@/lib/api";
@@ -36,52 +37,54 @@ export default function WishlistOwnerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Форма добавления подарка
   const [newItemTitle, setNewItemTitle] = useState("");
   const [newItemUrl, setNewItemUrl] = useState("");
+  const [newItemImageUrl, setNewItemImageUrl] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
+  const [newItemAllowGroup, setNewItemAllowGroup] = useState(false);
+  const [newItemTargetAmount, setNewItemTargetAmount] = useState("");
+  const [newItemMinContribution, setNewItemMinContribution] = useState("");
 
-  useEffect(() => {
+  // Редактирование подарка
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editAllowGroup, setEditAllowGroup] = useState(false);
+  const [editTargetAmount, setEditTargetAmount] = useState("");
+  const [editMinContribution, setEditMinContribution] = useState("");
+
+  async function load() {
     const token = window.localStorage.getItem("token");
     if (!token) {
       setError("Необходимо войти");
       setLoading(false);
       return;
     }
-    async function load() {
-      try {
-        const res = await fetch(getApiUrl(`/wishlists/${wishlistId}`), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          throw new Error("Не удалось загрузить вишлист");
-        }
-        const data = (await res.json()) as WishlistDetail;
-        setWishlist(data);
-      } catch (err: any) {
-        setError(err.message || "Ошибка");
-      } finally {
-        setLoading(false);
+    try {
+      const res = await fetch(getApiUrl(`/wishlists/${wishlistId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error("Не удалось загрузить вишлист");
       }
+      const data = (await res.json()) as WishlistDetail;
+      setWishlist(data);
+    } catch (err: any) {
+      setError(err.message || "Ошибка");
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     load();
 
     const ws = createWishlistSocket(wishlistId);
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as { type: string };
-        if (
-          msg.type === "item_created" ||
-          msg.type === "item_updated" ||
-          msg.type === "item_deleted" ||
-          msg.type === "item_reserved" ||
-          msg.type === "contribution_added"
-        ) {
-          // на каждое событие просто перезагружаем детали списка
-          load();
-        }
-      } catch {
-        // игнорируем
-      }
+    ws.onmessage = () => {
+      load();
     };
 
     return () => {
@@ -92,11 +95,12 @@ export default function WishlistOwnerPage() {
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
     const token = window.localStorage.getItem("token");
-    if (!token) {
-      setError("Необходимо войти");
-      return;
-    }
+    if (!token) return;
     try {
+      const price = newItemPrice ? Number(newItemPrice) * 100 : null;
+      const target = newItemTargetAmount ? Number(newItemTargetAmount) * 100 : null;
+      const minContrib = newItemMinContribution ? Number(newItemMinContribution) * 100 : null;
+
       const res = await fetch(getApiUrl(`/items/wishlist/${wishlistId}`), {
         method: "POST",
         headers: {
@@ -106,22 +110,90 @@ export default function WishlistOwnerPage() {
         body: JSON.stringify({
           title: newItemTitle,
           url: newItemUrl || null,
-          price_cents: newItemPrice ? Number(newItemPrice) * 100 : null,
-          allow_group_funding: false,
+          image_url: newItemImageUrl || null,
+          price_cents: price,
+          allow_group_funding: newItemAllowGroup,
+          target_amount_cents: newItemAllowGroup ? (target || price) : null,
+          min_contribution_cents: newItemAllowGroup ? (minContrib || Math.round((target || price || 0) * 0.1)) : null,
         }),
       });
       if (!res.ok) {
         throw new Error("Не удалось добавить подарок");
       }
-      const created = (await res.json()) as Item;
-      setWishlist((prev) =>
-        prev ? { ...prev, items: [...prev.items, { ...created, reserved_count: 0, collected_amount_cents: 0 }] } : prev,
-      );
       setNewItemTitle("");
       setNewItemUrl("");
+      setNewItemImageUrl("");
       setNewItemPrice("");
+      setNewItemAllowGroup(false);
+      setNewItemTargetAmount("");
+      setNewItemMinContribution("");
+      await load();
     } catch (err: any) {
-      setError(err.message || "Ошибка");
+      alert(err.message || "Ошибка");
+    }
+  }
+
+  function startEdit(item: Item) {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditUrl(item.url || "");
+    setEditImageUrl(item.image_url || "");
+    setEditPrice(item.price_cents ? (item.price_cents / 100).toString() : "");
+    setEditAllowGroup(item.allow_group_funding);
+    setEditTargetAmount(item.target_amount_cents ? (item.target_amount_cents / 100).toString() : "");
+    setEditMinContribution(item.min_contribution_cents ? (item.min_contribution_cents / 100).toString() : "");
+  }
+
+  async function handleUpdateItem() {
+    if (!editingItem) return;
+    const token = window.localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const price = editPrice ? Number(editPrice) * 100 : null;
+      const target = editTargetAmount ? Number(editTargetAmount) * 100 : null;
+      const minContrib = editMinContribution ? Number(editMinContribution) * 100 : null;
+
+      const res = await fetch(getApiUrl(`/items/${editingItem.id}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          url: editUrl || null,
+          image_url: editImageUrl || null,
+          price_cents: price,
+          allow_group_funding: editAllowGroup,
+          target_amount_cents: editAllowGroup ? (target || price) : null,
+          min_contribution_cents: editAllowGroup ? (minContrib || Math.round((target || price || 0) * 0.1)) : null,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error("Не удалось обновить подарок");
+      }
+      setEditingItem(null);
+      await load();
+    } catch (err: any) {
+      alert(err.message || "Ошибка");
+    }
+  }
+
+  async function handleDeleteItem(itemId: number) {
+    if (!confirm("Удалить этот подарок?")) return;
+    const token = window.localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(getApiUrl(`/items/${itemId}`), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error("Не удалось удалить подарок");
+      }
+      await load();
+    } catch (err: any) {
+      alert(err.message || "Ошибка");
     }
   }
 
@@ -148,14 +220,22 @@ export default function WishlistOwnerPage() {
           <header className="mb-8">
             <div className="card-glow rounded-3xl bg-white/95 p-6 shadow-xl backdrop-blur-sm">
               <h1 className="mb-2 text-3xl font-bold text-amber-900">{wishlist.title}</h1>
-              {wishlist.description && (
-                <p className="mb-4 text-stone-600">{wishlist.description}</p>
-              )}
+              {wishlist.description && <p className="mb-4 text-stone-600">{wishlist.description}</p>}
               <div className="rounded-xl bg-amber-50 p-4">
                 <p className="mb-2 text-sm font-semibold text-stone-700">Публичная ссылка для друзей:</p>
-                <code className="block rounded-lg bg-white px-4 py-2 font-mono text-sm text-amber-800">
-                  /w/{wishlist.public_slug}
+                <code className="block rounded-lg bg-white px-4 py-2 font-mono text-sm text-amber-800 break-all">
+                  {typeof window !== "undefined" ? `${window.location.origin}/w/${wishlist.public_slug}` : `/w/${wishlist.public_slug}`}
                 </code>
+                <button
+                  onClick={() => {
+                    const url = typeof window !== "undefined" ? `${window.location.origin}/w/${wishlist.public_slug}` : `/w/${wishlist.public_slug}`;
+                    navigator.clipboard.writeText(url);
+                    alert("Ссылка скопирована!");
+                  }}
+                  className="mt-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
+                >
+                  📋 Копировать ссылку
+                </button>
               </div>
             </div>
           </header>
@@ -166,36 +246,77 @@ export default function WishlistOwnerPage() {
               <span>➕</span>
               <span>Добавить подарок</span>
             </h2>
-            <p className="mb-4 text-stone-600">
-              Добавьте подарки — друзья увидят этот список по ссылке и смогут зарезервировать подарки или скинуться на дорогие.
-            </p>
-            <form onSubmit={handleAddItem} className="grid gap-4 sm:grid-cols-[2fr,2fr,1fr,auto]">
-              <input
-                placeholder="Название подарка"
-                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
-                value={newItemTitle}
-                onChange={(e) => setNewItemTitle(e.target.value)}
-                required
-              />
+            <form onSubmit={handleAddItem} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <input
+                  placeholder="Название подарка *"
+                  className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                  value={newItemTitle}
+                  onChange={(e) => setNewItemTitle(e.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Цена, ₽"
+                  type="number"
+                  min="0"
+                  className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                  value={newItemPrice}
+                  onChange={(e) => setNewItemPrice(e.target.value)}
+                />
+              </div>
               <input
                 placeholder="Ссылка на магазин"
-                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                type="url"
+                className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
                 value={newItemUrl}
                 onChange={(e) => setNewItemUrl(e.target.value)}
               />
               <input
-                placeholder="Цена, ₽"
-                type="number"
-                min="0"
-                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
-                value={newItemPrice}
-                onChange={(e) => setNewItemPrice(e.target.value)}
+                placeholder="URL картинки подарка"
+                type="url"
+                className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                value={newItemImageUrl}
+                onChange={(e) => setNewItemImageUrl(e.target.value)}
               />
+              <label className="flex items-start gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
+                <input
+                  type="checkbox"
+                  checked={newItemAllowGroup}
+                  onChange={(e) => setNewItemAllowGroup(e.target.checked)}
+                  className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
+                />
+                <div className="flex-1">
+                  <span className="block font-semibold text-stone-700">Разрешить скидываться</span>
+                  <span className="mt-1 block text-xs text-stone-600">
+                    Несколько друзей смогут скинуться на этот подарок вместе
+                  </span>
+                </div>
+              </label>
+              {newItemAllowGroup && (
+                <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
+                  <input
+                    placeholder="Целевая сумма, ₽ (по умолчанию = цена)"
+                    type="number"
+                    min="0"
+                    className="w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-2 text-sm transition-all focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                    value={newItemTargetAmount}
+                    onChange={(e) => setNewItemTargetAmount(e.target.value)}
+                  />
+                  <input
+                    placeholder="Минимальный вклад, ₽ (по умолчанию 10% от цели)"
+                    type="number"
+                    min="0"
+                    className="w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-2 text-sm transition-all focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                    value={newItemMinContribution}
+                    onChange={(e) => setNewItemMinContribution(e.target.value)}
+                  />
+                </div>
+              )}
               <button
                 type="submit"
-                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
+                className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
               >
-                Добавить
+                Добавить подарок
               </button>
             </form>
           </section>
@@ -217,63 +338,178 @@ export default function WishlistOwnerPage() {
                 key={item.id}
                 className="card-glow rounded-2xl bg-white/95 p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex gap-4">
+                  {item.image_url && (
+                    <div className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl">
+                      <Image
+                        src={item.image_url}
+                        alt={item.title}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  )}
                   <div className="flex-1">
-                    <h2 className="mb-2 text-xl font-bold text-amber-900">{item.title}</h2>
-                    {item.url && (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 transition-colors hover:text-amber-900"
-                      >
-                        <span>🔗</span>
-                        <span>Открыть в магазине</span>
-                      </a>
-                    )}
-                  </div>
-                  {typeof item.price_cents === "number" && (
-                    <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 px-4 py-3 text-right">
-                      <div className="text-2xl font-bold text-amber-900">
-                        {(item.price_cents / 100).toFixed(0)} ₽
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h2 className="mb-2 text-xl font-bold text-amber-900">{item.title}</h2>
+                        {item.url && (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 transition-colors hover:text-amber-900"
+                          >
+                            <span>🔗</span>
+                            <span>Открыть в магазине</span>
+                          </a>
+                        )}
                       </div>
-                      {item.allow_group_funding && item.target_amount_cents && (
-                        <div className="mt-1 text-xs text-stone-600">
-                          Цель: {(item.target_amount_cents / 100).toFixed(0)} ₽
+                      {typeof item.price_cents === "number" && (
+                        <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 px-4 py-3 text-right">
+                          <div className="text-2xl font-bold text-amber-900">
+                            {(item.price_cents / 100).toFixed(0)} ₽
+                          </div>
+                          {item.allow_group_funding && item.target_amount_cents && (
+                            <div className="mt-1 text-xs text-stone-600">
+                              Цель: {(item.target_amount_cents / 100).toFixed(0)} ₽
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Статистика */}
-                <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl bg-amber-50/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">📌</span>
-                    <span className="text-sm font-semibold text-stone-700">
-                      Резервов: <span className="text-amber-900">{item.reserved_count}</span>
-                    </span>
-                  </div>
-                  {item.allow_group_funding && item.target_amount_cents && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">💰</span>
-                      <span className="text-sm font-semibold text-stone-700">
-                        Собрано: <span className="text-amber-900">
-                          {(item.collected_amount_cents / 100).toFixed(0)} ₽
-                        </span> из{" "}
-                        <span className="text-amber-900">
-                          {(item.target_amount_cents / 100).toFixed(0)} ₽
+                    {/* Статистика */}
+                    <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">📌</span>
+                        <span className="text-sm font-semibold text-stone-700">
+                          Резервов: <span className="text-amber-900">{item.reserved_count}</span>
                         </span>
-                      </span>
+                      </div>
+                      {item.allow_group_funding && item.target_amount_cents && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">💰</span>
+                          <span className="text-sm font-semibold text-stone-700">
+                            Собрано: <span className="text-amber-900">
+                              {(item.collected_amount_cents / 100).toFixed(0)} ₽
+                            </span> из{" "}
+                            <span className="text-amber-900">
+                              {(item.target_amount_cents / 100).toFixed(0)} ₽
+                            </span>
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    {/* Кнопки управления */}
+                    <div className="mt-4 flex gap-3">
+                      <button
+                        onClick={() => startEdit(item)}
+                        className="rounded-xl border-2 border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-50"
+                      >
+                        ✏️ Редактировать
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="rounded-xl border-2 border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50"
+                      >
+                        🗑️ Удалить
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </article>
             ))}
           </section>
+
+          {/* Модалка редактирования */}
+          {editingItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="card-glow w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+                <h3 className="mb-4 text-xl font-bold text-amber-900">Редактировать подарок</h3>
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <input
+                      placeholder="Название *"
+                      className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      required
+                    />
+                    <input
+                      placeholder="Цена, ₽"
+                      type="number"
+                      min="0"
+                      className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                    />
+                  </div>
+                  <input
+                    placeholder="Ссылка на магазин"
+                    type="url"
+                    className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                  />
+                  <input
+                    placeholder="URL картинки"
+                    type="url"
+                    className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                    value={editImageUrl}
+                    onChange={(e) => setEditImageUrl(e.target.value)}
+                  />
+                  <label className="flex items-start gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
+                    <input
+                      type="checkbox"
+                      checked={editAllowGroup}
+                      onChange={(e) => setEditAllowGroup(e.target.checked)}
+                      className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
+                    />
+                    <span className="font-semibold text-stone-700">Разрешить скидываться</span>
+                  </label>
+                  {editAllowGroup && (
+                    <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
+                      <input
+                        placeholder="Целевая сумма, ₽"
+                        type="number"
+                        min="0"
+                        className="w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-2 text-sm transition-all focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                        value={editTargetAmount}
+                        onChange={(e) => setEditTargetAmount(e.target.value)}
+                      />
+                      <input
+                        placeholder="Минимальный вклад, ₽"
+                        type="number"
+                        min="0"
+                        className="w-full rounded-xl border-2 border-amber-200 bg-white px-4 py-2 text-sm transition-all focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                        value={editMinContribution}
+                        onChange={(e) => setEditMinContribution(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setEditingItem(null)}
+                      className="flex-1 rounded-xl border-2 border-amber-300 bg-white px-4 py-3 font-semibold text-amber-800 transition-colors hover:bg-amber-50"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      onClick={handleUpdateItem}
+                      className="flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
+                    >
+                      Сохранить
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </main>
   );
 }
-
