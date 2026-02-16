@@ -126,107 +126,146 @@ export default function WishlistOwnerPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-5 py-8 text-sm">
-      {loading && <p className="text-slate-500">Загружаем...</p>}
-      {error && !loading && <p className="text-red-600">{error}</p>}
+    <main className="mx-auto max-w-4xl">
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-3 text-stone-600">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+            <span>Загружаем вишлист...</span>
+          </div>
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-6 text-center">
+          <p className="font-semibold text-red-700">{error}</p>
+        </div>
+      )}
+
       {wishlist && (
         <>
-          <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold">{wishlist.title}</h1>
-            {wishlist.description && (
-              <p className="text-xs text-slate-600">{wishlist.description}</p>
-            )}
-            <p className="text-xs text-slate-500">
-              Публичная ссылка:{" "}
-              <code className="rounded bg-slate-100 px-1">
-                /w/{wishlist.public_slug}
-              </code>
-            </p>
+          {/* Заголовок */}
+          <header className="mb-8">
+            <div className="card-glow rounded-3xl bg-white/95 p-6 shadow-xl backdrop-blur-sm">
+              <h1 className="mb-2 text-3xl font-bold text-amber-900">{wishlist.title}</h1>
+              {wishlist.description && (
+                <p className="mb-4 text-stone-600">{wishlist.description}</p>
+              )}
+              <div className="rounded-xl bg-amber-50 p-4">
+                <p className="mb-2 text-sm font-semibold text-stone-700">Публичная ссылка для друзей:</p>
+                <code className="block rounded-lg bg-white px-4 py-2 font-mono text-sm text-amber-800">
+                  /w/{wishlist.public_slug}
+                </code>
+              </div>
+            </div>
           </header>
 
-          <section className="rounded-lg border border-dashed border-slate-300 bg-white p-4">
-            <p className="text-xs text-slate-600">
-              Добавьте подарки — друзья увидят этот список по ссылке и смогут
-              зарезервировать подарки или скинуться на дорогие.
+          {/* Форма добавления подарка */}
+          <section className="card-glow mb-8 rounded-3xl bg-white/95 p-6 shadow-xl backdrop-blur-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-amber-900">
+              <span>➕</span>
+              <span>Добавить подарок</span>
+            </h2>
+            <p className="mb-4 text-stone-600">
+              Добавьте подарки — друзья увидят этот список по ссылке и смогут зарезервировать подарки или скинуться на дорогие.
             </p>
-            <form
-              onSubmit={handleAddItem}
-              className="mt-3 grid gap-3 md:grid-cols-[2fr,2fr,1fr,auto]"
-            >
+            <form onSubmit={handleAddItem} className="grid gap-4 sm:grid-cols-[2fr,2fr,1fr,auto]">
               <input
                 placeholder="Название подарка"
-                className="rounded-md border border-slate-300 px-3 py-2"
+                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
                 value={newItemTitle}
                 onChange={(e) => setNewItemTitle(e.target.value)}
                 required
               />
               <input
                 placeholder="Ссылка на магазин"
-                className="rounded-md border border-slate-300 px-3 py-2"
+                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
                 value={newItemUrl}
                 onChange={(e) => setNewItemUrl(e.target.value)}
               />
               <input
                 placeholder="Цена, ₽"
-                className="rounded-md border border-slate-300 px-3 py-2"
+                type="number"
+                min="0"
+                className="rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
                 value={newItemPrice}
                 onChange={(e) => setNewItemPrice(e.target.value)}
               />
               <button
                 type="submit"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-700"
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
               >
                 Добавить
               </button>
             </form>
           </section>
 
-          <section className="mt-2 flex flex-col gap-3">
+          {/* Список подарков */}
+          <section className="space-y-4">
             {wishlist.items.length === 0 && (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-xs text-slate-600">
-                В этом вишлисте пока нет подарков. Добавьте первый подарок — ссылка
-                уже готова, можно отправлять друзьям.
+              <div className="card-glow rounded-3xl border-2 border-dashed border-amber-300 bg-white/90 p-12 text-center backdrop-blur-sm">
+                <div className="mb-4 text-6xl">🎁</div>
+                <h3 className="mb-2 text-xl font-bold text-amber-900">Пока нет подарков</h3>
+                <p className="text-stone-600">
+                  Добавьте первый подарок — ссылка уже готова, можно отправлять друзьям.
+                </p>
               </div>
             )}
+
             {wishlist.items.map((item) => (
               <article
                 key={item.id}
-                className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                className="card-glow rounded-2xl bg-white/95 p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-semibold">{item.title}</h2>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h2 className="mb-2 text-xl font-bold text-amber-900">{item.title}</h2>
                     {item.url && (
                       <a
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-1 inline-flex text-xs text-indigo-600 hover:underline"
+                        className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 transition-colors hover:text-amber-900"
                       >
-                        Открыть в магазине
+                        <span>🔗</span>
+                        <span>Открыть в магазине</span>
                       </a>
                     )}
                   </div>
                   {typeof item.price_cents === "number" && (
-                    <div className="text-right text-xs text-slate-600">
-                      <div className="font-semibold">
+                    <div className="rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 px-4 py-3 text-right">
+                      <div className="text-2xl font-bold text-amber-900">
                         {(item.price_cents / 100).toFixed(0)} ₽
                       </div>
                       {item.allow_group_funding && item.target_amount_cents && (
-                        <div>
-                          Сбор: {(item.target_amount_cents / 100).toFixed(0)} ₽
+                        <div className="mt-1 text-xs text-stone-600">
+                          Цель: {(item.target_amount_cents / 100).toFixed(0)} ₽
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>Резервов: {item.reserved_count}</span>
-                  {item.allow_group_funding && item.target_amount_cents && (
-                    <span>
-                      Собрано: {(item.collected_amount_cents / 100).toFixed(0)} ₽ из{" "}
-                      {(item.target_amount_cents / 100).toFixed(0)} ₽
+
+                {/* Статистика */}
+                <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl bg-amber-50/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📌</span>
+                    <span className="text-sm font-semibold text-stone-700">
+                      Резервов: <span className="text-amber-900">{item.reserved_count}</span>
                     </span>
+                  </div>
+                  {item.allow_group_funding && item.target_amount_cents && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">💰</span>
+                      <span className="text-sm font-semibold text-stone-700">
+                        Собрано: <span className="text-amber-900">
+                          {(item.collected_amount_cents / 100).toFixed(0)} ₽
+                        </span> из{" "}
+                        <span className="text-amber-900">
+                          {(item.target_amount_cents / 100).toFixed(0)} ₽
+                        </span>
+                      </span>
+                    </div>
                   )}
                 </div>
               </article>
