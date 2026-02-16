@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from app.core.config import settings
 
 
+# Инициализируем CryptContext с bcrypt для безопасного хеширования паролей
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
 
