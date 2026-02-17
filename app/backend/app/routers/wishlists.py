@@ -89,6 +89,7 @@ def get_wishlist_detail(
                 "allow_group_funding": item.allow_group_funding,
                 "target_amount_cents": item.target_amount_cents,
                 "min_contribution_cents": item.min_contribution_cents,
+                "source_unavailable": item.source_unavailable,
                 "reserved_count": total_reserved,
                 "collected_amount_cents": collected,
             }
@@ -193,6 +194,7 @@ def get_public_wishlist(slug: str, db: Session = Depends(get_db)):
                 "allow_group_funding": item.allow_group_funding,
                 "target_amount_cents": item.target_amount_cents,
                 "min_contribution_cents": item.min_contribution_cents,
+                "source_unavailable": item.source_unavailable,
                 "reservations": reservations,
                 "collected_amount_cents": total_contributed,
             }
