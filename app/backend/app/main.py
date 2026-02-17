@@ -25,7 +25,7 @@ def health_check():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,4 +52,5 @@ def list_routes():
                 "methods": list(route.methods) if route.methods else [],
             })
     return {"routes": routes, "total": len(routes)}
+
 
