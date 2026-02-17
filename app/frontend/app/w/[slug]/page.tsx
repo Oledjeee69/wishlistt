@@ -32,6 +32,7 @@ interface PublicItem {
   allow_group_funding: boolean;
   target_amount_cents?: number | null;
   min_contribution_cents?: number | null;
+  source_unavailable?: boolean;
   reservations: Reservation[];
   collected_amount_cents: number;
 }
@@ -61,6 +62,7 @@ export default function PublicWishlistPage() {
   const [contributeAmount, setContributeAmount] = useState("");
   const [contributeAnonymous, setContributeAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [justUpdated, setJustUpdated] = useState(false);
 
   async function loadWishlist() {
     try {
@@ -82,11 +84,12 @@ export default function PublicWishlistPage() {
   }, [slug]);
 
   useEffect(() => {
-    // WebSocket для realtime обновлений (подключаемся после загрузки wishlist)
     if (!wishlist) return;
     const ws = createWishlistSocket(wishlist.id);
-    ws.onmessage = () => {
-      loadWishlist();
+    ws.onmessage = async () => {
+      await loadWishlist();
+      setJustUpdated(true);
+      setTimeout(() => setJustUpdated(false), 2000);
     };
     return () => ws.close();
   }, [wishlist?.id]);
@@ -166,7 +169,7 @@ export default function PublicWishlistPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl">
+    <main className="mx-auto max-w-4xl px-0 sm:px-0">
       {loading && (
         <div className="flex items-center justify-center py-12">
           <div className="flex items-center gap-3 text-stone-600">
@@ -186,6 +189,11 @@ export default function PublicWishlistPage() {
 
       {wishlist && (
         <>
+          {justUpdated && (
+            <div className="mb-4 animate-fade-in rounded-xl bg-emerald-100 px-4 py-2 text-center text-sm font-semibold text-emerald-800">
+              ✨ Обновлено — изменения видны всем в реальном времени
+            </div>
+          )}
           {/* Заголовок */}
           <header className="mb-8">
             <div className="card-glow rounded-3xl bg-white/95 p-8 shadow-xl backdrop-blur-sm">
@@ -244,9 +252,14 @@ export default function PublicWishlistPage() {
                   key={item.id}
                   className={`card-glow rounded-2xl bg-white/95 p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl ${
                     isReserved && !item.allow_group_funding ? "opacity-75" : ""
-                  }`}
+                  } ${item.source_unavailable ? "opacity-90" : ""}`}
                 >
-                  <div className="flex gap-4">
+                  {item.source_unavailable && (
+                    <div className="mb-4 rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">
+                      ⚠️ Товар снят с продажи — ссылка может не работать. Обратитесь к организатору.
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-4 sm:flex-row">
                     {/* Картинка */}
                     {item.image_url && (
                       <div className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl">
@@ -308,7 +321,9 @@ export default function PublicWishlistPage() {
                           <p className="mt-2 text-xs text-stone-600">
                             {isFullyFunded
                               ? "✅ Цель достигнута!"
-                              : `Осталось собрать ${(remaining / 100).toFixed(0)} ₽`}
+                              : remaining > 0
+                                ? `Осталось собрать ${(remaining / 100).toFixed(0)} ₽ — скиньтесь, чтобы довести до цели`
+                                : "Сбор продолжается"}
                             {item.min_contribution_cents && (
                               <span className="ml-2">
                                 (мин. вклад: {(item.min_contribution_cents / 100).toFixed(0)} ₽)
@@ -388,8 +403,8 @@ export default function PublicWishlistPage() {
 
           {/* Модалка резервирования */}
           {reserveModalItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="card-glow w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+              <div className="card-glow max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:max-h-none sm:max-w-md sm:rounded-3xl">
                 <h3 className="mb-4 text-xl font-bold text-amber-900">
                   Зарезервировать подарок
                 </h3>
@@ -446,8 +461,8 @@ export default function PublicWishlistPage() {
 
           {/* Модалка вклада */}
           {contributeModalItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="card-glow w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+              <div className="card-glow max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:max-h-none sm:max-w-md sm:rounded-3xl">
                 <h3 className="mb-4 text-xl font-bold text-amber-900">Скинуться на подарок</h3>
                 <p className="mb-4 text-stone-600">{contributeModalItem.title}</p>
                 <div className="space-y-4">
