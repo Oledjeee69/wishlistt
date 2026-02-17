@@ -26,7 +26,7 @@ router = APIRouter(prefix="/items", tags=["reservations"])
 
 
 @router.post("/{item_id}/reserve", status_code=status.HTTP_201_CREATED)
-def reserve_item(
+async def reserve_item(
     item_id: int,
     payload: ReserveCreate,
     db: Session = Depends(get_db),
@@ -55,17 +55,12 @@ def reserve_item(
     db.refresh(reservation)
 
     room = str(item.wishlist_id)
-    try:
-        import anyio
-
-        anyio.from_thread.run(manager.broadcast, room, {"type": "item_reserved"})
-    except Exception:
-        pass
+    await manager.broadcast(room, {"type": "item_reserved"})
     return {"id": reservation.id}
 
 
 @router.post("/{item_id}/contributions", status_code=status.HTTP_201_CREATED)
-def contribute_to_item(
+async def contribute_to_item(
     item_id: int,
     payload: ContributionCreate,
     db: Session = Depends(get_db),
@@ -127,11 +122,6 @@ def contribute_to_item(
     db.refresh(contribution)
 
     room = str(item.wishlist_id)
-    try:
-        import anyio
-
-        anyio.from_thread.run(manager.broadcast, room, {"type": "contribution_added"})
-    except Exception:
-        pass
+    await manager.broadcast(room, {"type": "contribution_added"})
     return {"id": contribution.id}
 
