@@ -7,7 +7,9 @@ from app.routers import auth, wishlists, items, reservations, ws
 try:
     from app.routers import preview
     _has_preview = True
-except ImportError:
+except ImportError as e:
+    import logging
+    logging.warning("Preview router not loaded: %s. Autofill by URL will be disabled.", e)
     _has_preview = False
 
 
@@ -32,6 +34,7 @@ def health_check():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Preview deployments и основной домен
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
