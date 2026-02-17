@@ -2,7 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, wishlists, items, reservations, ws, preview
+from app.routers import auth, wishlists, items, reservations, ws
+
+try:
+    from app.routers import preview
+    _has_preview = True
+except ImportError:
+    _has_preview = False
 
 
 app = FastAPI(title=settings.app_name)
@@ -38,7 +44,8 @@ app.include_router(wishlists.router)
 app.include_router(items.router)
 app.include_router(reservations.router)
 app.include_router(ws.router)
-app.include_router(preview.router)
+if _has_preview:
+    app.include_router(preview.router)
 
 
 @app.get("/routes", tags=["debug"])
@@ -52,5 +59,4 @@ def list_routes():
                 "methods": list(route.methods) if route.methods else [],
             })
     return {"routes": routes, "total": len(routes)}
-
 
