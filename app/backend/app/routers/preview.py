@@ -50,16 +50,10 @@ def preview_url(url: str = Query(..., min_length=10)):
         if price_cents is not None:
             result["price_cents"] = price_cents
 
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Не удалось загрузить страницу. Проверьте ссылку или введите данные вручную.",
-        ) from e
+    except httpx.HTTPError:
+        pass  # вернём пустой result — фронт покажет поля для ручного ввода
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Ошибка разбора страницы. Введите данные вручную.",
-        )
+        pass
     return result
 
 
