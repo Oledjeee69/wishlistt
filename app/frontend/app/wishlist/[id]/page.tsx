@@ -16,6 +16,7 @@ interface Item {
   allow_group_funding: boolean;
   target_amount_cents?: number | null;
   min_contribution_cents?: number | null;
+  source_unavailable?: boolean;
   reserved_count: number;
   collected_amount_cents: number;
 }
@@ -45,6 +46,8 @@ export default function WishlistOwnerPage() {
   const [newItemAllowGroup, setNewItemAllowGroup] = useState(false);
   const [newItemTargetAmount, setNewItemTargetAmount] = useState("");
   const [newItemMinContribution, setNewItemMinContribution] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Редактирование подарка
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -55,6 +58,7 @@ export default function WishlistOwnerPage() {
   const [editAllowGroup, setEditAllowGroup] = useState(false);
   const [editTargetAmount, setEditTargetAmount] = useState("");
   const [editMinContribution, setEditMinContribution] = useState("");
+  const [editSourceUnavailable, setEditSourceUnavailable] = useState(false);
 
   async function load() {
     const token = window.localStorage.getItem("token");
@@ -91,6 +95,27 @@ export default function WishlistOwnerPage() {
       ws.close();
     };
   }, [wishlistId]);
+
+  async function fetchPreviewFromUrl() {
+    const url = newItemUrl?.trim();
+    if (!url || !url.startsWith("http")) {
+      alert("Вставьте ссылку на товар в поле выше");
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(getApiUrl(`/preview?url=${encodeURIComponent(url)}`));
+      if (!res.ok) throw new Error("Не удалось подтянуть данные");
+      const data = (await res.json()) as { title?: string | null; image_url?: string | null; price_cents?: number | null };
+      if (data.title) setNewItemTitle(data.title);
+      if (data.image_url) setNewItemImageUrl(data.image_url);
+      if (data.price_cents != null) setNewItemPrice((data.price_cents / 100).toFixed(0));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Ошибка. Введите данные вручную.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
@@ -142,6 +167,39 @@ export default function WishlistOwnerPage() {
     setEditAllowGroup(item.allow_group_funding);
     setEditTargetAmount(item.target_amount_cents ? (item.target_amount_cents / 100).toString() : "");
     setEditMinContribution(item.min_contribution_cents ? (item.min_contribution_cents / 100).toString() : "");
+    setEditSourceUnavailable(item.source_unavailable ?? false);
+  }
+
+  async function handleToggleUnavailable(item: Item) {
+    const msg = item.source_unavailable
+      ? "Вернуть товар в список как доступный?"
+      : "Пометить как недоступный? (Товар снят с продажи — участники сбора увидят уведомление)";
+    if (!confirm(msg)) return;
+    const token = window.localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(getApiUrl(`/items/${item.id}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: item.title,
+          url: item.url || null,
+          image_url: item.image_url || null,
+          price_cents: item.price_cents ?? null,
+          allow_group_funding: item.allow_group_funding,
+          target_amount_cents: item.target_amount_cents ?? null,
+          min_contribution_cents: item.min_contribution_cents ?? null,
+          source_unavailable: !item.source_unavailable,
+        }),
+      });
+      if (!res.ok) throw new Error("Не удалось обновить");
+      await load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Ошибка");
+    }
   }
 
   async function handleUpdateItem() {
@@ -167,6 +225,7 @@ export default function WishlistOwnerPage() {
           allow_group_funding: editAllowGroup,
           target_amount_cents: editAllowGroup ? (target || price) : null,
           min_contribution_cents: editAllowGroup ? (minContrib || Math.round((target || price || 0) * 0.1)) : null,
+          source_unavailable: editSourceUnavailable,
         }),
       });
       if (!res.ok) {
@@ -198,7 +257,7 @@ export default function WishlistOwnerPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl">
+    <main className="mx-auto max-w-4xl px-0 sm:px-0">
       {loading && (
         <div className="flex items-center justify-center py-12">
           <div className="flex items-center gap-3 text-stone-600">
@@ -223,18 +282,19 @@ export default function WishlistOwnerPage() {
               {wishlist.description && <p className="mb-4 text-stone-600">{wishlist.description}</p>}
               <div className="rounded-xl bg-amber-50 p-4">
                 <p className="mb-2 text-sm font-semibold text-stone-700">Публичная ссылка для друзей:</p>
-                <code className="block rounded-lg bg-white px-4 py-2 font-mono text-sm text-amber-800 break-all">
+                <code className="block break-all rounded-lg bg-white px-4 py-2 font-mono text-sm text-amber-800">
                   {typeof window !== "undefined" ? `${window.location.origin}/w/${wishlist.public_slug}` : `/w/${wishlist.public_slug}`}
                 </code>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const url = typeof window !== "undefined" ? `${window.location.origin}/w/${wishlist.public_slug}` : `/w/${wishlist.public_slug}`;
-                    navigator.clipboard.writeText(url);
-                    alert("Ссылка скопирована!");
+                    await navigator.clipboard.writeText(url);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2000);
                   }}
-                  className="mt-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
+                  className="mt-2 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700 active:bg-amber-800"
                 >
-                  📋 Копировать ссылку
+                  {linkCopied ? "✓ Скопировано!" : "📋 Копировать ссылку"}
                 </button>
               </div>
             </div>
@@ -247,6 +307,23 @@ export default function WishlistOwnerPage() {
               <span>Добавить подарок</span>
             </h2>
             <form onSubmit={handleAddItem} className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  placeholder="Ссылка на товар — вставьте URL для автозаполнения"
+                  type="url"
+                  className="flex-1 rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                  value={newItemUrl}
+                  onChange={(e) => setNewItemUrl(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={fetchPreviewFromUrl}
+                  disabled={previewLoading || !newItemUrl?.trim()?.startsWith("http")}
+                  className="flex-shrink-0 rounded-xl border-2 border-amber-400 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900 transition-all hover:bg-amber-200 disabled:opacity-50 disabled:hover:bg-amber-100"
+                >
+                  {previewLoading ? "⏳ Загружаем..." : "✨ Подтянуть по ссылке"}
+                </button>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   placeholder="Название подарка *"
@@ -265,14 +342,7 @@ export default function WishlistOwnerPage() {
                 />
               </div>
               <input
-                placeholder="Ссылка на магазин"
-                type="url"
-                className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
-                value={newItemUrl}
-                onChange={(e) => setNewItemUrl(e.target.value)}
-              />
-              <input
-                placeholder="URL картинки подарка"
+                placeholder="URL картинки (если не подтянулось)"
                 type="url"
                 className="w-full rounded-xl border-2 border-amber-200 bg-amber-50/50 px-4 py-3 text-base transition-all focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/20"
                 value={newItemImageUrl}
@@ -336,9 +406,14 @@ export default function WishlistOwnerPage() {
             {wishlist.items.map((item) => (
               <article
                 key={item.id}
-                className="card-glow rounded-2xl bg-white/95 p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl"
+                className={`card-glow rounded-2xl bg-white/95 p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-xl ${item.source_unavailable ? "opacity-90" : ""}`}
               >
-                <div className="flex gap-4">
+                {item.source_unavailable && (
+                  <div className="mb-4 rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">
+                    ⚠️ Товар снят с продажи — на него уже скидывались. Участники видят это уведомление.
+                  </div>
+                )}
+                <div className="flex flex-col gap-4 sm:flex-row">
                   {item.image_url && (
                     <div className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl">
                       <Image
@@ -404,12 +479,18 @@ export default function WishlistOwnerPage() {
                     </div>
 
                     {/* Кнопки управления */}
-                    <div className="mt-4 flex gap-3">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         onClick={() => startEdit(item)}
                         className="rounded-xl border-2 border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-50"
                       >
                         ✏️ Редактировать
+                      </button>
+                      <button
+                        onClick={() => handleToggleUnavailable(item)}
+                        className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                      >
+                        {item.source_unavailable ? "✓ Вернуть в список" : "⚠️ Товар сняли"}
                       </button>
                       <button
                         onClick={() => handleDeleteItem(item.id)}
@@ -426,8 +507,8 @@ export default function WishlistOwnerPage() {
 
           {/* Модалка редактирования */}
           {editingItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="card-glow w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+              <div className="card-glow max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:max-h-none sm:rounded-3xl">
                 <h3 className="mb-4 text-xl font-bold text-amber-900">Редактировать подарок</h3>
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -469,6 +550,20 @@ export default function WishlistOwnerPage() {
                       className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
                     />
                     <span className="font-semibold text-stone-700">Разрешить скидываться</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
+                    <input
+                      type="checkbox"
+                      checked={editSourceUnavailable}
+                      onChange={(e) => setEditSourceUnavailable(e.target.checked)}
+                      className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-400"
+                    />
+                    <div>
+                      <span className="font-semibold text-stone-700">Товар снят с продажи</span>
+                      <span className="mt-1 block text-xs text-stone-600">
+                        Показать участникам, что товар больше недоступен в магазине
+                      </span>
+                    </div>
                   </label>
                   {editAllowGroup && (
                     <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-4">
