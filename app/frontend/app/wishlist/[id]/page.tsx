@@ -47,6 +47,7 @@ export default function WishlistOwnerPage() {
   const [newItemTargetAmount, setNewItemTargetAmount] = useState("");
   const [newItemMinContribution, setNewItemMinContribution] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewMessage, setPreviewMessage] = useState<{ type: "ok" | "empty" | "error"; text: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   // Редактирование подарка
@@ -108,10 +109,12 @@ export default function WishlistOwnerPage() {
   async function fetchPreviewFromUrl() {
     const url = newItemUrl?.trim();
     if (!url || !url.startsWith("http")) {
-      alert("Вставьте ссылку на товар в поле выше");
+      setPreviewMessage({ type: "error", text: "Вставьте ссылку на товар в поле выше" });
+      setTimeout(() => setPreviewMessage(null), 3000);
       return;
     }
     setPreviewLoading(true);
+    setPreviewMessage(null);
     try {
       const res = await fetch(getApiUrl(`/preview?url=${encodeURIComponent(url)}`));
       if (!res.ok) throw new Error("Не удалось подтянуть данные");
@@ -119,8 +122,18 @@ export default function WishlistOwnerPage() {
       if (data.title) setNewItemTitle(data.title);
       if (data.image_url) setNewItemImageUrl(data.image_url);
       if (data.price_cents != null) setNewItemPrice((data.price_cents / 100).toFixed(0));
+
+      const hasAny = !!(data.title || data.image_url || data.price_cents != null);
+      setPreviewMessage({
+        type: hasAny ? "ok" : "empty",
+        text: hasAny
+          ? `Подтянуто: ${[data.title && "название", data.image_url && "картинка", data.price_cents != null && "цена"].filter(Boolean).join(", ")}`
+          : "Не удалось подтянуть данные — введите вручную",
+      });
+      setTimeout(() => setPreviewMessage(null), 4000);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Ошибка. Введите данные вручную.");
+      setPreviewMessage({ type: "error", text: err instanceof Error ? err.message : "Ошибка. Введите данные вручную." });
+      setTimeout(() => setPreviewMessage(null), 4000);
     } finally {
       setPreviewLoading(false);
     }
@@ -333,6 +346,20 @@ export default function WishlistOwnerPage() {
                   {previewLoading ? "⏳ Загружаем..." : "✨ Подтянуть по ссылке"}
                 </button>
               </div>
+              {previewMessage && (
+                <div
+                  className={`rounded-xl px-4 py-3 text-sm font-medium ${
+                    previewMessage.type === "ok"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : previewMessage.type === "empty"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {previewMessage.type === "ok" ? "✓ " : "⚠ "}
+                  {previewMessage.text}
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   placeholder="Название подарка *"
