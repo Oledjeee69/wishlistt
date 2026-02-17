@@ -85,13 +85,26 @@ export default function PublicWishlistPage() {
 
   useEffect(() => {
     if (!wishlist) return;
-    const ws = createWishlistSocket(wishlist.id);
-    ws.onmessage = async () => {
-      await loadWishlist();
-      setJustUpdated(true);
-      setTimeout(() => setJustUpdated(false), 2000);
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+    const connect = () => {
+      if (cancelled) return;
+      ws = createWishlistSocket(wishlist.id);
+      ws.onmessage = async () => {
+        await loadWishlist();
+        setJustUpdated(true);
+        setTimeout(() => setJustUpdated(false), 2000);
+      };
+      ws.onclose = () => {
+        if (!cancelled) setTimeout(connect, 3000);
+      };
+      ws.onerror = () => {};
     };
-    return () => ws.close();
+    connect();
+    return () => {
+      cancelled = true;
+      ws?.close();
+    };
   }, [wishlist?.id]);
 
   async function handleReserve() {
