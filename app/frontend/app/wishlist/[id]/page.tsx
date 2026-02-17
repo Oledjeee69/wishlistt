@@ -86,13 +86,22 @@ export default function WishlistOwnerPage() {
   useEffect(() => {
     load();
 
-    const ws = createWishlistSocket(wishlistId);
-    ws.onmessage = () => {
-      load();
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+    const connect = () => {
+      if (cancelled) return;
+      ws = createWishlistSocket(wishlistId);
+      ws.onmessage = () => load();
+      ws.onclose = () => {
+        if (!cancelled) setTimeout(connect, 3000);
+      };
+      ws.onerror = () => {};
     };
+    connect();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      ws?.close();
     };
   }, [wishlistId]);
 
