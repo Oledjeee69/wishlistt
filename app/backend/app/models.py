@@ -68,6 +68,7 @@ class WishlistItem(Base):
     allow_group_funding: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     target_amount_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     min_contribution_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    source_unavailable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
