@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, wishlists, items, reservations, ws
+from app.routers import auth, wishlists, items, reservations, ws, preview
 
 
 app = FastAPI(title=settings.app_name)
@@ -38,6 +38,7 @@ app.include_router(wishlists.router)
 app.include_router(items.router)
 app.include_router(reservations.router)
 app.include_router(ws.router)
+app.include_router(preview.router)
 
 
 @app.get("/routes", tags=["debug"])
