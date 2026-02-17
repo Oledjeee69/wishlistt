@@ -18,6 +18,7 @@ class ItemBase(BaseModel):
     allow_group_funding: bool = False
     target_amount_cents: Optional[int] = None
     min_contribution_cents: Optional[int] = None
+    source_unavailable: bool = False
 
 
 class ItemPublic(ItemBase):
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/items", tags=["items"])
     response_model=ItemPublic,
     status_code=status.HTTP_201_CREATED,
 )
-def create_item(
+async def create_item(
     wishlist_id: int,
     item_in: ItemBase,
     db: Session = Depends(get_db),
@@ -58,27 +59,19 @@ def create_item(
         allow_group_funding=item_in.allow_group_funding,
         target_amount_cents=item_in.target_amount_cents,
         min_contribution_cents=item_in.min_contribution_cents,
+        source_unavailable=item_in.source_unavailable,
     )
     db.add(item)
     db.commit()
     db.refresh(item)
 
-    # realtime сообщение
-    from app.models import Wishlist as WishlistModel  # локальный импорт во избежание циклов
-
     room = str(item.wishlist_id)
-    # уведомляем всех подписчиков списка
-    try:
-        import anyio
-
-        anyio.from_thread.run(manager.broadcast, room, {"type": "item_created"})
-    except Exception:
-        pass
+    await manager.broadcast(room, {"type": "item_created"})
     return item
 
 
 @router.patch("/{item_id}", response_model=ItemPublic)
-def update_item(
+async def update_item(
     item_id: int,
     item_in: ItemBase,
     db: Session = Depends(get_db),
@@ -98,17 +91,12 @@ def update_item(
     db.refresh(item)
 
     room = str(item.wishlist_id)
-    try:
-        import anyio
-
-        anyio.from_thread.run(manager.broadcast, room, {"type": "item_updated"})
-    except Exception:
-        pass
+    await manager.broadcast(room, {"type": "item_updated"})
     return item
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_item(
+async def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -125,11 +113,6 @@ def delete_item(
     db.delete(item)
     db.commit()
     room = str(wishlist_id)
-    try:
-        import anyio
-
-        anyio.from_thread.run(manager.broadcast, room, {"type": "item_deleted"})
-    except Exception:
-        pass
+    await manager.broadcast(room, {"type": "item_deleted"})
     return
 
