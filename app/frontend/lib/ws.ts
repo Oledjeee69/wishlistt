@@ -8,7 +8,7 @@ const getWsBase = () => {
 
 export function createWishlistSocket(wishlistId: number) {
   const base = getWsBase();
-  const socket = new WebSocket(`${base}/${wishlistId}`);
-  return socket;
+  const url = `${base}/${wishlistId}`;
+  return new WebSocket(url);
 }
 
